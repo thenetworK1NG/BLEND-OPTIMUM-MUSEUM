@@ -197,8 +197,9 @@
       const knob = document.getElementById('joystickKnob');
       let touchLookActive = false;
       let lastTouchX = 0, lastTouchY = 0;
-      let joyActive = false;
-      let joyCx = 0, joyCy = 0, joyR = 0;
+  let joyActive = false;
+  let joyCx = 0, joyCy = 0, joyR = 0;
+  let joyTouchId = null;
       const joyVec = new THREE.Vector2(0, 0); // x=left/right, y=forward/back
 
       function isLandscape() {
@@ -250,8 +251,12 @@
       function initJoystick() {
         if (!isMobile) return;
         joystick.style.display = 'block';
-        const rect = joystick.getBoundingClientRect();
-        joyCx = rect.left + rect.width / 2; joyCy = rect.top + rect.height / 2; joyR = rect.width * 0.5 - 4;
+        function computeRect() {
+          const rect = joystick.getBoundingClientRect();
+          joyCx = rect.left + rect.width / 2; joyCy = rect.top + rect.height / 2; joyR = rect.width * 0.5 - 4;
+          return rect;
+        }
+        let rect = computeRect();
         function setKnob(x, y) {
           knob.style.left = x + 'px'; knob.style.top = y + 'px';
         }
@@ -259,19 +264,40 @@
 
         joystick.addEventListener('touchstart', (e) => {
           e.preventDefault(); joyActive = true;
+          rect = computeRect();
+          const t = e.changedTouches[0];
+          joyTouchId = t.identifier;
         }, { passive: false });
         joystick.addEventListener('touchmove', (e) => {
           e.preventDefault();
-          const t = e.changedTouches[0];
+          let t = null;
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === joyTouchId) { t = e.changedTouches[i]; break; }
+          }
+          if (!t) return;
           const dx = t.clientX - joyCx; const dy = t.clientY - joyCy;
           const v = new THREE.Vector2(dx, dy);
           if (v.length() > joyR) v.setLength(joyR);
           setKnob(v.x + rect.width / 2, v.y + rect.height / 2);
           joyVec.set(v.x / joyR, v.y / joyR);
         }, { passive: false });
-        const reset = () => { joyActive = false; joyVec.set(0,0); setKnob(rect.width/2, rect.height/2); };
+        const reset = (e) => {
+          if (e) {
+            let ended = false;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+              if (e.changedTouches[i].identifier === joyTouchId) { ended = true; break; }
+            }
+            if (!ended) return;
+          }
+          joyActive = false; joyVec.set(0,0); setKnob(rect.width/2, rect.height/2); joyTouchId = null;
+        };
         joystick.addEventListener('touchend', reset);
         joystick.addEventListener('touchcancel', reset);
+
+        // Recompute center on rotate/resize to keep the knob centered
+        const recalc = () => { rect = computeRect(); setKnob(rect.width/2, rect.height/2); };
+        window.addEventListener('orientationchange', () => setTimeout(recalc, 100));
+        window.addEventListener('resize', () => setTimeout(recalc, 100));
       }
       initJoystick();
 
