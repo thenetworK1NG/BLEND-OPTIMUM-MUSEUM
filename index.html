@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>three.js - misc - octree collisions (My Art)</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <!-- Use CDN CSS so it works regardless of the server root -->
+  <link type="text/css" rel="stylesheet" href="https://threejs.org/examples/main.css" />
+  <style>
+    html, body { height: 100%; overscroll-behavior: contain; }
+    body { margin: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
+    #joystick {
+      position: fixed; left: 20px; bottom: 20px; width: 120px; height: 120px;
+      border-radius: 50%; background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15); display: none; z-index: 9;
+      box-sizing: border-box; touch-action: none;
+    }
+    #joystickKnob {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 56px; height: 56px; border-radius: 50%;
+      background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.35);
+      box-shadow: 0 0 8px rgba(0,0,0,0.2);
+      pointer-events: none;
+    }
+    #mobileOverlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10; background: rgba(0,0,0,0.6); color: #fff; }
+    #mobileOverlay.show { display: flex; }
+    #mobileOverlay .panel { text-align: center; background: rgba(0,0,0,0.5); padding: 16px 24px; border-radius: 10px; }
+    #mobileOverlay button { margin-top: 10px; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.15); color: #fff; }
+  </style>
+  </head>
+  <body>
+    <div id="info">
+      Octree threejs demo - basic collisions with static triangle mesh<br />
+      MOUSE to look around and to throw balls<br />
+      WASD to move and SPACE to jump
+    </div>
+    <div id="container"></div>
+    <div id="joystick"><div id="joystickKnob"></div></div>
+    <div id="mobileOverlay">
+      <div class="panel">
+        <div style="font-weight:600; margin-bottom:6px;">Rotate device to landscape</div>
+        <div>Tap to play; drag to look, left joystick to move.</div>
+        <button id="startBtn">Start</button>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.180.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.180.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from 'three';
+      import Stats from 'three/addons/libs/stats.module.js';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      import { Octree } from 'three/addons/math/Octree.js';
+      import { OctreeHelper } from 'three/addons/helpers/OctreeHelper.js';
+      import { Capsule } from 'three/addons/math/Capsule.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+      const clock = new THREE.Clock();
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x88ccee);
+      scene.fog = new THREE.Fog(0x88ccee, 0, 50);
+
+      const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.rotation.order = 'YXZ';
+
+      const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
+      fillLight1.position.set(2, 1, 1);
+      scene.add(fillLight1);
+
+  // Subtle ambient to avoid fully black shadows on non-PBR materials
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+  scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+      directionalLight.position.set(-5, 25, -1);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.camera.near = 0.01;
+      directionalLight.shadow.camera.far = 500;
+      directionalLight.shadow.camera.right = 30;
+      directionalLight.shadow.camera.left = -30;
+      directionalLight.shadow.camera.top = 30;
+      directionalLight.shadow.camera.bottom = -30;
+      directionalLight.shadow.mapSize.width = 1024;
+      directionalLight.shadow.mapSize.height = 1024;
+      directionalLight.shadow.radius = 4;
+      directionalLight.shadow.bias = -0.00006;
+      scene.add(directionalLight);
+
+      const container = document.getElementById('container');
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setAnimationLoop(animate);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.VSMShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      container.appendChild(renderer.domElement);
+
+  // Prefiltered environment map (IBL) for realistic ambient lighting
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  const roomEnvScene = new RoomEnvironment(renderer);
+  const envRT = pmremGenerator.fromScene(roomEnvScene);
+  const roomEnvMap = envRT.texture;
+
+      const stats = new Stats();
+      stats.domElement.style.position = 'absolute';
+      stats.domElement.style.top = '0px';
+      container.appendChild(stats.domElement);
+
+      const GRAVITY = 30;
+
+    const NUM_SPHERES = 100;
+  const SPHERE_RADIUS = 0.2;
+
+      const STEPS_PER_FRAME = 5;
+
+  const sphereGeometry = new THREE.IcosahedronGeometry(SPHERE_RADIUS, 5);
+  const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xdede8d });
+
+      
+
+      const spheres = [];
+      let sphereIdx = 0;
+
+      for (let i = 0; i < NUM_SPHERES; i++) {
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.castShadow = true;
+        sphere.receiveShadow = true;
+        scene.add(sphere);
+        spheres.push({
+          mesh: sphere,
+          collider: new THREE.Sphere(new THREE.Vector3(0, -100, 0), SPHERE_RADIUS),
+          velocity: new THREE.Vector3()
+        });
+      }
+
+      const worldOctree = new Octree();
+
+      const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 1, 0), 0.35);
+
+      const playerVelocity = new THREE.Vector3();
+      const playerDirection = new THREE.Vector3();
+
+      let playerOnFloor = false;
+      let mouseTime = 0;
+
+      const keyStates = {};
+
+      const vector1 = new THREE.Vector3();
+      const vector2 = new THREE.Vector3();
+      const vector3 = new THREE.Vector3();
+
+      document.addEventListener('keydown', (event) => {
+        keyStates[event.code] = true;
+      });
+
+      document.addEventListener('keyup', (event) => {
+        keyStates[event.code] = false;
+      });
+
+      container.addEventListener('mousedown', () => {
+        document.body.requestPointerLock();
+        mouseTime = performance.now();
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (document.pointerLockElement !== null) throwBall();
+      });
+
+      function clampPitch() {
+        const halfPi = Math.PI / 2 - 0.01;
+        camera.rotation.x = Math.max(-halfPi, Math.min(halfPi, camera.rotation.x));
+      }
+      document.body.addEventListener('mousemove', (event) => {
+        if (document.pointerLockElement === document.body) {
+          camera.rotation.y -= event.movementX / 500;
+          camera.rotation.x -= event.movementY / 500;
+          clampPitch();
+        }
+      });
+
+      // --- Mobile support: orientation, touch look, and joystick move ---
+      const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+      const overlay = document.getElementById('mobileOverlay');
+      const startBtn = document.getElementById('startBtn');
+      const joystick = document.getElementById('joystick');
+      const knob = document.getElementById('joystickKnob');
+      let touchLookActive = false;
+      let lastTouchX = 0, lastTouchY = 0;
+      let joyActive = false;
+      let joyCx = 0, joyCy = 0, joyR = 0;
+      const joyVec = new THREE.Vector2(0, 0); // x=left/right, y=forward/back
+
+      function isLandscape() {
+        return (window.innerWidth >= window.innerHeight);
+      }
+
+      function updateOverlay() {
+        if (isMobile && !isLandscape()) overlay.classList.add('show');
+        else overlay.classList.remove('show');
+      }
+      window.addEventListener('orientationchange', () => setTimeout(updateOverlay, 50));
+      window.addEventListener('resize', () => setTimeout(updateOverlay, 50));
+      updateOverlay();
+
+      // Start button allows entering play without pointer lock on mobile
+      startBtn?.addEventListener('click', () => {
+        overlay.classList.remove('show');
+        // On desktop, optionally enter pointer lock
+        if (!isMobile) document.body.requestPointerLock?.();
+      });
+
+      // Touch to look (drag anywhere on right 65% of screen)
+      function onTouchStart(e) {
+        if (!isMobile) return;
+        for (const t of e.changedTouches) {
+          const x = t.clientX, y = t.clientY;
+          if (x > window.innerWidth * 0.35) {
+            touchLookActive = true; lastTouchX = x; lastTouchY = y;
+          }
+        }
+      }
+      function onTouchMove(e) {
+        if (!isMobile) return;
+        if (touchLookActive) {
+          const t = e.changedTouches[0];
+          const dx = t.clientX - lastTouchX; const dy = t.clientY - lastTouchY;
+          camera.rotation.y -= dx / 250; // more sensitive on mobile
+          camera.rotation.x -= dy / 250;
+          clampPitch();
+          lastTouchX = t.clientX; lastTouchY = t.clientY;
+        }
+      }
+      function onTouchEnd() { touchLookActive = false; }
+      window.addEventListener('touchstart', onTouchStart, { passive: false });
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
+      window.addEventListener('touchend', onTouchEnd, { passive: false });
+
+      // Virtual joystick (left bottom)
+      function initJoystick() {
+        if (!isMobile) return;
+        joystick.style.display = 'block';
+        const rect = joystick.getBoundingClientRect();
+        joyCx = rect.left + rect.width / 2; joyCy = rect.top + rect.height / 2; joyR = rect.width * 0.5 - 4;
+        function setKnob(x, y) {
+          knob.style.left = x + 'px'; knob.style.top = y + 'px';
+        }
+        setKnob(rect.width / 2, rect.height / 2);
+
+        joystick.addEventListener('touchstart', (e) => {
+          e.preventDefault(); joyActive = true;
+        }, { passive: false });
+        joystick.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+          const t = e.changedTouches[0];
+          const dx = t.clientX - joyCx; const dy = t.clientY - joyCy;
+          const v = new THREE.Vector2(dx, dy);
+          if (v.length() > joyR) v.setLength(joyR);
+          setKnob(v.x + rect.width / 2, v.y + rect.height / 2);
+          joyVec.set(v.x / joyR, v.y / joyR);
+        }, { passive: false });
+        const reset = () => { joyActive = false; joyVec.set(0,0); setKnob(rect.width/2, rect.height/2); };
+        joystick.addEventListener('touchend', reset);
+        joystick.addEventListener('touchcancel', reset);
+      }
+      initJoystick();
+
+      window.addEventListener('resize', onWindowResize);
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function throwBall() {
+        const sphere = spheres[sphereIdx];
+        camera.getWorldDirection(playerDirection);
+        sphere.collider.center.copy(playerCollider.end).addScaledVector(playerDirection, playerCollider.radius * 1.5);
+        const impulse = 15 + 30 * (1 - Math.exp((mouseTime - performance.now()) * 0.001));
+        sphere.velocity.copy(playerDirection).multiplyScalar(impulse);
+        sphere.velocity.addScaledVector(playerVelocity, 2);
+        sphereIdx = (sphereIdx + 1) % spheres.length;
+      }
+
+      function playerCollisions() {
+        const result = worldOctree.capsuleIntersect(playerCollider);
+        playerOnFloor = false;
+        if (result) {
+          playerOnFloor = result.normal.y > 0;
+          if (!playerOnFloor) {
+            playerVelocity.addScaledVector(result.normal, -result.normal.dot(playerVelocity));
+          }
+          if (result.depth >= 1e-10) {
+            playerCollider.translate(result.normal.multiplyScalar(result.depth));
+          }
+        }
+      }
+
+      function updatePlayer(deltaTime) {
+        let damping = Math.exp(-4 * deltaTime) - 1;
+        if (!playerOnFloor) {
+          playerVelocity.y -= GRAVITY * deltaTime;
+          damping *= 0.1;
+        }
+        playerVelocity.addScaledVector(playerVelocity, damping);
+        const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
+        playerCollider.translate(deltaPosition);
+        playerCollisions();
+        camera.position.copy(playerCollider.end);
+      }
+
+      function playerSphereCollision(sphere) {
+        const center = vector1.addVectors(playerCollider.start, playerCollider.end).multiplyScalar(0.5);
+        const sphere_center = sphere.collider.center;
+        const r = playerCollider.radius + sphere.collider.radius;
+        const r2 = r * r;
+        for (const point of [playerCollider.start, playerCollider.end, center]) {
+          const d2 = point.distanceToSquared(sphere_center);
+          if (d2 < r2) {
+            const normal = vector1.subVectors(point, sphere_center).normalize();
+            const v1 = vector2.copy(normal).multiplyScalar(normal.dot(playerVelocity));
+            const v2 = vector3.copy(normal).multiplyScalar(normal.dot(sphere.velocity));
+            playerVelocity.add(v2).sub(v1);
+            sphere.velocity.add(v1).sub(v2);
+            const d = (r - Math.sqrt(d2)) / 2;
+            sphere_center.addScaledVector(normal, -d);
+          }
+        }
+      }
+
+      function spheresCollisions() {
+        for (let i = 0, length = spheres.length; i < length; i++) {
+          const s1 = spheres[i];
+          for (let j = i + 1; j < length; j++) {
+            const s2 = spheres[j];
+            const d2 = s1.collider.center.distanceToSquared(s2.collider.center);
+            const r = s1.collider.radius + s2.collider.radius;
+            const r2 = r * r;
+            if (d2 < r2) {
+              const normal = vector1.subVectors(s1.collider.center, s2.collider.center).normalize();
+              const v1 = vector2.copy(normal).multiplyScalar(normal.dot(s1.velocity));
+              const v2 = vector3.copy(normal).multiplyScalar(normal.dot(s2.velocity));
+              s1.velocity.add(v2).sub(v1);
+              s2.velocity.add(v1).sub(v2);
+              const d = (r - Math.sqrt(d2)) / 2;
+              s1.collider.center.addScaledVector(normal, d);
+              s2.collider.center.addScaledVector(normal, -d);
+            }
+          }
+        }
+      }
+
+      function updateSpheres(deltaTime) {
+        spheres.forEach((sphere) => {
+          sphere.collider.center.addScaledVector(sphere.velocity, deltaTime);
+          const result = worldOctree.sphereIntersect(sphere.collider);
+          if (result) {
+            sphere.velocity.addScaledVector(result.normal, -result.normal.dot(sphere.velocity) * 1.5);
+            sphere.collider.center.add(result.normal.multiplyScalar(result.depth));
+          } else {
+            sphere.velocity.y -= GRAVITY * deltaTime;
+          }
+          const damping = Math.exp(-1.5 * deltaTime) - 1;
+          sphere.velocity.addScaledVector(sphere.velocity, damping);
+          playerSphereCollision(sphere);
+        });
+
+        spheresCollisions();
+
+        for (const sphere of spheres) {
+          sphere.mesh.position.copy(sphere.collider.center);
+        }
+      }
+
+      function getForwardVector() {
+        camera.getWorldDirection(playerDirection);
+        playerDirection.y = 0;
+        playerDirection.normalize();
+        return playerDirection;
+      }
+
+      function getSideVector() {
+        camera.getWorldDirection(playerDirection);
+        playerDirection.y = 0;
+        playerDirection.normalize();
+        playerDirection.cross(camera.up);
+        return playerDirection;
+      }
+
+      function controls(deltaTime) {
+        const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
+        // Keyboard (desktop)
+        if (!/Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent)) {
+          if (keyStates['KeyW']) playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
+          if (keyStates['KeyS']) playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
+          if (keyStates['KeyA']) playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
+          if (keyStates['KeyD']) playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
+          if (playerOnFloor && keyStates['Space']) playerVelocity.y = 15;
+        }
+        // Joystick (mobile)
+        if (joyVec.lengthSq() > 0.0001) {
+          const forward = getForwardVector().clone();
+          const side = getSideVector().clone();
+          // joyVec.y: up is negative (screen coords), invert
+          playerVelocity.add(forward.multiplyScalar(-joyVec.y * speedDelta));
+          playerVelocity.add(side.multiplyScalar(joyVec.x * speedDelta));
+        }
+      }
+
+  // Load local map file
+  const loader = new GLTFLoader();
+      loader.load('map.glb', (gltf) => {
+        scene.add(gltf.scene);
+        gltf.scene.updateMatrixWorld(true);
+        worldOctree.fromGraphNode(gltf.scene);
+        gltf.scene.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.material.map) {
+              child.material.map.anisotropy = 4;
+            }
+          }
+        });
+        const helper = new OctreeHelper(worldOctree);
+        helper.visible = false;
+        scene.add(helper);
+        const gui = new GUI({ width: 200 });
+        gui.add({ debug: false }, 'debug').onChange(function (value) {
+          helper.visible = value;
+        });
+
+        // View distance and fog controls
+        const initialFogColor = scene.fog ? scene.fog.color.clone() : new THREE.Color(0x88ccee);
+        const settings = {
+          viewDistance: camera.far,
+          fogEnabled: scene.fog !== null,
+          fogColor: '#' + initialFogColor.getHexString(),
+          fogNear: scene.fog ? scene.fog.near : 0,
+          fogFar: scene.fog ? scene.fog.far : 50
+        };
+
+        function applyViewDistance() {
+          settings.viewDistance = Math.max(settings.viewDistance, camera.near + 0.1);
+          camera.far = settings.viewDistance;
+          camera.updateProjectionMatrix();
+          if (scene.fog && settings.fogFar > camera.far) {
+            settings.fogFar = camera.far;
+            applyFog();
+          }
+        }
+
+        function applyFog() {
+          if (settings.fogEnabled) {
+            const col = new THREE.Color(settings.fogColor);
+            const near = Math.min(settings.fogNear, settings.fogFar - 0.001);
+            const far = Math.min(settings.fogFar, camera.far);
+            if (!scene.fog) {
+              scene.fog = new THREE.Fog(col, near, far);
+            } else {
+              scene.fog.color.copy(col);
+              scene.fog.near = near;
+              scene.fog.far = far;
+            }
+          } else {
+            scene.fog = null;
+          }
+        }
+
+        const viewFolder = gui.addFolder('View');
+        viewFolder.add(settings, 'viewDistance', 10, 2000, 1).name('View Distance').onChange(applyViewDistance);
+
+        const fogFolder = gui.addFolder('Fog');
+        fogFolder.add(settings, 'fogEnabled').name('Enabled').onChange(applyFog);
+        fogFolder.addColor(settings, 'fogColor').name('Color').onChange(applyFog);
+        fogFolder.add(settings, 'fogNear', 0, 500, 0.1).name('Near').onChange(() => {
+          if (settings.fogNear >= settings.fogFar) settings.fogNear = Math.max(0, settings.fogFar - 0.1);
+          applyFog();
+        });
+        fogFolder.add(settings, 'fogFar', 1, 2000, 0.1).name('Far').onChange(() => {
+          if (settings.fogFar <= settings.fogNear) settings.fogFar = settings.fogNear + 0.1;
+          if (settings.fogFar > camera.far) settings.fogFar = camera.far;
+          applyFog();
+        });
+
+        // Lights controls
+        const lightsFolder = gui.addFolder('Lights');
+
+        // Helpers for lights (optional debug)
+        const dirHelper = new THREE.DirectionalLightHelper(directionalLight, 2);
+        dirHelper.visible = false;
+        scene.add(dirHelper);
+        const hemiHelper = new THREE.HemisphereLightHelper(fillLight1, 2);
+        hemiHelper.visible = false;
+        scene.add(hemiHelper);
+
+        const lightSettings = {
+          // Hemisphere
+          hemiIntensity: fillLight1.intensity,
+          hemiSkyColor: '#' + fillLight1.color.getHexString(),
+          hemiGroundColor: '#' + fillLight1.groundColor.getHexString(),
+          hemiX: fillLight1.position.x,
+          hemiY: fillLight1.position.y,
+          hemiZ: fillLight1.position.z,
+          showHemiHelper: false,
+          // Directional
+          dirIntensity: directionalLight.intensity,
+          dirColor: '#' + directionalLight.color.getHexString(),
+          dirX: directionalLight.position.x,
+          dirY: directionalLight.position.y,
+          dirZ: directionalLight.position.z,
+          dirCastShadow: directionalLight.castShadow,
+          dirShadowBias: directionalLight.shadow.bias,
+          dirShadowRadius: directionalLight.shadow.radius,
+          showDirHelper: false
+        };
+
+        // Hemisphere folder
+        const hemiFolder = lightsFolder.addFolder('Hemisphere');
+        hemiFolder.add(lightSettings, 'hemiIntensity', 0, 5, 0.01).name('Intensity').onChange((v) => {
+          fillLight1.intensity = v;
+        });
+        hemiFolder.addColor(lightSettings, 'hemiSkyColor').name('Sky Color').onChange((v) => {
+          fillLight1.color.set(v);
+          hemiHelper.update();
+        });
+        hemiFolder.addColor(lightSettings, 'hemiGroundColor').name('Ground Color').onChange((v) => {
+          fillLight1.groundColor.set(v);
+          hemiHelper.update();
+        });
+        hemiFolder.add(lightSettings, 'hemiX', -50, 50, 0.1).name('Pos X').onChange((v) => {
+          fillLight1.position.x = v; hemiHelper.update();
+        });
+        hemiFolder.add(lightSettings, 'hemiY', -50, 50, 0.1).name('Pos Y').onChange((v) => {
+          fillLight1.position.y = v; hemiHelper.update();
+        });
+        hemiFolder.add(lightSettings, 'hemiZ', -50, 50, 0.1).name('Pos Z').onChange((v) => {
+          fillLight1.position.z = v; hemiHelper.update();
+        });
+        hemiFolder.add(lightSettings, 'showHemiHelper').name('Show Helper').onChange((v) => {
+          hemiHelper.visible = v;
+        });
+
+        // Directional folder
+        const dirFolder = lightsFolder.addFolder('Directional');
+        dirFolder.add(lightSettings, 'dirIntensity', 0, 10, 0.01).name('Intensity').onChange((v) => {
+          directionalLight.intensity = v; dirHelper.update();
+        });
+        dirFolder.addColor(lightSettings, 'dirColor').name('Color').onChange((v) => {
+          directionalLight.color.set(v); dirHelper.update();
+        });
+        dirFolder.add(lightSettings, 'dirX', -100, 100, 0.1).name('Pos X').onChange((v) => {
+          directionalLight.position.x = v; dirHelper.update();
+        });
+        dirFolder.add(lightSettings, 'dirY', -100, 100, 0.1).name('Pos Y').onChange((v) => {
+          directionalLight.position.y = v; dirHelper.update();
+        });
+        dirFolder.add(lightSettings, 'dirZ', -100, 100, 0.1).name('Pos Z').onChange((v) => {
+          directionalLight.position.z = v; dirHelper.update();
+        });
+        dirFolder.add(lightSettings, 'dirCastShadow').name('Cast Shadow').onChange((v) => {
+          directionalLight.castShadow = v;
+        });
+        dirFolder.add(lightSettings, 'dirShadowBias', -0.005, 0.005, 0.00001).name('Shadow Bias').onChange((v) => {
+          directionalLight.shadow.bias = v;
+        });
+        dirFolder.add(lightSettings, 'dirShadowRadius', 0, 10, 0.1).name('Shadow Radius').onChange((v) => {
+          directionalLight.shadow.radius = v;
+        });
+        dirFolder.add(lightSettings, 'showDirHelper').name('Show Helper').onChange((v) => {
+          dirHelper.visible = v; dirHelper.update();
+        });
+
+        // Ambient folder
+        const ambSettings = {
+          ambIntensity: ambientLight.intensity,
+          ambColor: '#' + ambientLight.color.getHexString()
+        };
+        const ambFolder = lightsFolder.addFolder('Ambient');
+        ambFolder.add(ambSettings, 'ambIntensity', 0, 2, 0.01).name('Intensity').onChange((v) => {
+          ambientLight.intensity = v;
+        });
+        ambFolder.addColor(ambSettings, 'ambColor').name('Color').onChange((v) => {
+          ambientLight.color.set(v);
+        });
+
+        // Environment lighting (IBL) controls
+        const envSettings = { enabled: true, intensity: 1.0 };
+        function applyEnv() {
+          scene.environment = envSettings.enabled ? roomEnvMap : null;
+          // Update envMapIntensity on materials that support it
+          scene.traverse((child) => {
+            if (child.isMesh && child.material) {
+              const mats = Array.isArray(child.material) ? child.material : [child.material];
+              mats.forEach((m) => {
+                if ('envMapIntensity' in m) {
+                  m.envMapIntensity = envSettings.enabled ? envSettings.intensity : 0;
+                  m.needsUpdate = true;
+                }
+              });
+            }
+          });
+        }
+        const envFolder = gui.addFolder('Environment');
+        envFolder.add(envSettings, 'enabled').name('Enabled').onChange(applyEnv);
+        envFolder.add(envSettings, 'intensity', 0, 3, 0.01).name('Intensity').onChange(applyEnv);
+
+        // Renderer exposure (overall brightness)
+        const renderFolder = gui.addFolder('Render');
+        const renderSettings = { exposure: renderer.toneMappingExposure ?? 1.0 };
+        renderFolder.add(renderSettings, 'exposure', 0.1, 2.5, 0.01).name('Exposure').onChange((v) => {
+          renderer.toneMappingExposure = v;
+        });
+
+        // Initialize to current settings
+        applyViewDistance();
+        applyFog();
+        applyEnv();
+      }, undefined, (err) => {
+        console.error('Failed to load map.glb:', err);
+      });
+
+      
+
+      function teleportPlayerIfOob() {
+        if (camera.position.y <= -25) {
+          playerCollider.start.set(0, 0.35, 0);
+          playerCollider.end.set(0, 1, 0);
+          playerCollider.radius = 0.35;
+          camera.position.copy(playerCollider.end);
+          camera.rotation.set(0, 0, 0);
+        }
+      }
+
+      function animate() {
+        const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
+        for (let i = 0; i < STEPS_PER_FRAME; i++) {
+          controls(deltaTime);
+          updatePlayer(deltaTime);
+          updateSpheres(deltaTime);
+          teleportPlayerIfOob();
+        }
+        renderer.render(scene, camera);
+        stats.update();
+      }
+    </script>
+  </body>
+</html>
