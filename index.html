@@ -4,7 +4,6 @@
     <title>three.js - misc - octree collisions (My Art)</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
-  <!-- Use CDN CSS so it works regardless of the server root -->
   <link type="text/css" rel="stylesheet" href="https://threejs.org/examples/main.css" />
   <style>
     html, body { height: 100%; overscroll-behavior: contain; }
@@ -29,11 +28,7 @@
   </style>
   </head>
   <body>
-    <div id="info">
-      Octree threejs demo - basic collisions with static triangle mesh<br />
-      MOUSE to look around and to throw balls<br />
-      WASD to move and SPACE to jump
-    </div>
+    
     <div id="container"></div>
     <div id="joystick"><div id="joystickKnob"></div></div>
     <div id="mobileOverlay">
@@ -66,8 +61,9 @@
   const clock = new THREE.Clock();
 
   const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x88ccee);
-      scene.fog = new THREE.Fog(0x88ccee, 0, 50);
+  scene.background = new THREE.Color(0x88ccee);
+  // Fog disabled by default
+  scene.fog = null;
 
   // Mobile detection and mode
   const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
@@ -79,38 +75,32 @@
       // On mobile we simplify lighting to save GPU work: single ambient light and no shadows / env maps
       let fillLight1, ambientLight, directionalLight;
       if (isMobile) {
-        ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+  ambientLight = new THREE.AmbientLight(0xffffff, 1);
         scene.add(ambientLight);
-        // Keep a subtle hemisphere for stylistic variety but at very low cost
-        fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 0.2);
-        scene.add(fillLight1);
-        // No directional shadow light on mobile
+  // Hemisphere light: default settings (from user-specified values)
+  fillLight1 = new THREE.HemisphereLight(0xfffdf5, 0xffffff, 3.07);
+  fillLight1.position.set(2, 1, 1);
+  scene.add(fillLight1);
+        // Directional light intentionally disabled on mobile (intensity 0)
         directionalLight = new THREE.DirectionalLight(0xffffff, 0);
         directionalLight.castShadow = false;
-        scene.add(directionalLight);
+        // not added to scene
       } else {
-        fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
-        fillLight1.position.set(2, 1, 1);
-        scene.add(fillLight1);
+  // Hemisphere light: default settings (from user-specified values)
+  fillLight1 = new THREE.HemisphereLight(0xfffdf5, 0xffffff, 3.07);
+  fillLight1.position.set(2, 1, 1);
+  scene.add(fillLight1);
 
         // Subtle ambient to avoid fully black shadows on non-PBR materials
-        ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
+  ambientLight = new THREE.AmbientLight(0xffffff, 1);
         scene.add(ambientLight);
 
-        directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+        // Directional light intentionally disabled (intensity 0)
+        directionalLight = new THREE.DirectionalLight(0xffffff, 0);
         directionalLight.position.set(-5, 25, -1);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.camera.near = 0.01;
-        directionalLight.shadow.camera.far = 500;
-        directionalLight.shadow.camera.right = 30;
-        directionalLight.shadow.camera.left = -30;
-        directionalLight.shadow.camera.top = 30;
-        directionalLight.shadow.camera.bottom = -30;
-        directionalLight.shadow.mapSize.width = 1024;
-        directionalLight.shadow.mapSize.height = 1024;
-        directionalLight.shadow.radius = 4;
-        directionalLight.shadow.bias = -0.00006;
-        scene.add(directionalLight);
+        directionalLight.castShadow = false;
+        // shadow settings omitted because directional light is disabled
+        // not added to scene
       }
 
       const container = document.getElementById('container');
@@ -144,32 +134,7 @@
 
       const GRAVITY = 30;
 
-    // Reduce physics/sim complexity on mobile
-    const NUM_SPHERES = isMobile ? 30 : 100;
-  const SPHERE_RADIUS = isMobile ? 0.18 : 0.2;
-
       const STEPS_PER_FRAME = isMobile ? 2 : 5;
-
-  const sphereGeometry = new THREE.IcosahedronGeometry(SPHERE_RADIUS, isMobile ? 1 : 5);
-  const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xdede8d });
-
-      
-
-      const spheres = [];
-      let sphereIdx = 0;
-
-      for (let i = 0; i < NUM_SPHERES; i++) {
-        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-        sphere.castShadow = !isMobile;
-        sphere.receiveShadow = !isMobile;
-        scene.add(sphere);
-        spheres.push({
-          mesh: sphere,
-          collider: new THREE.Sphere(new THREE.Vector3(0, -100, 0), SPHERE_RADIUS),
-          velocity: new THREE.Vector3()
-        });
-      }
-
   const worldOctree = new Octree();
 
       const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 1, 0), 0.35);
@@ -178,7 +143,10 @@
       const playerDirection = new THREE.Vector3();
 
       let playerOnFloor = false;
-      let mouseTime = 0;
+  // Mobile walk/run mode flag and factor (walking is default)
+  let isMobileWalking = true;
+  const MOBILE_WALK_FACTOR = 0.5; // walk is 50% of standard speed
+  // mouseTime removed - throwing balls disabled
 
       const keyStates = {};
 
@@ -196,12 +164,8 @@
 
       container.addEventListener('mousedown', () => {
         document.body.requestPointerLock();
-        mouseTime = performance.now();
       });
 
-      document.addEventListener('mouseup', () => {
-        if (document.pointerLockElement !== null) throwBall();
-      });
 
       function clampPitch() {
         const halfPi = Math.PI / 2 - 0.01;
@@ -348,6 +312,110 @@
       }
       initJoystick();
 
+      // Mobile: add Walk / Run buttons near joystick
+      if (isMobile) {
+        const walkBtn = document.createElement('button');
+        walkBtn.id = 'walkBtn';
+        walkBtn.type = 'button';
+        walkBtn.title = 'Walk';
+        // inline white SVG icon (pedestrian)
+        walkBtn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="#fff"><circle cx="12" cy="4" r="2"/><path d="M10.5 8.5c-.3 0-.6.1-.8.3L8 10.5 9 12l1.5-1 .5 3H12l-.6-3.4L10.8 9.2c.2-.1.3-.2.3-.7 0-.4-.2-.5-.6-.5zM7 16v2h2v-2H7zm5-1l1.5 2H16v-2h-4z"/></g></svg>';
+        Object.assign(walkBtn.style, {
+          position: 'fixed',
+          right: '20px',
+          bottom: '60px',
+          zIndex: 2147483646,
+          width: '56px',
+          height: '56px',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(0,0,0,0.45)',
+          padding: '0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(4px)'
+        });
+        document.body.appendChild(walkBtn);
+
+        const runBtn = document.createElement('button');
+        runBtn.id = 'runBtn';
+        runBtn.type = 'button';
+        runBtn.title = 'Run';
+        // inline white SVG icon (running)
+        runBtn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="#fff"><circle cx="7" cy="4" r="1.6"/><path d="M12 8l-1 3 2 1 1-2 2 1-1 4h2l1-5-3-2-1 1-1-4zM5 18h2v-2H5v2z"/></g></svg>';
+        Object.assign(runBtn.style, {
+          position: 'fixed',
+          right: '20px',
+          bottom: '120px',
+          zIndex: 2147483646,
+          width: '56px',
+          height: '56px',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(0,0,0,0.45)',
+          padding: '0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(4px)'
+        });
+        document.body.appendChild(runBtn);
+
+        // default: walking is the default mode on mobile
+        isMobileWalking = true;
+        runBtn.style.opacity = '0.7';
+        runBtn.style.zIndex = 2147483647;
+        walkBtn.style.opacity = '1.0';
+
+        // small toast to notify user of current mode
+        const modeToast = document.createElement('div');
+        modeToast.id = 'modeToast';
+        Object.assign(modeToast.style, {
+          position: 'fixed',
+          right: '50%',
+          bottom: '35%',
+          transform: 'translateX(50%)',
+          padding: '10px 16px',
+          borderRadius: '10px',
+          background: 'rgba(0,0,0,0.65)',
+          color: '#fff',
+          fontWeight: '600',
+          zIndex: 2147483648,
+          display: 'none',
+          pointerEvents: 'none'
+        });
+        document.body.appendChild(modeToast);
+
+        function showModeToast(text) {
+          modeToast.textContent = text;
+          modeToast.style.display = '';
+          modeToast.style.opacity = '1';
+          setTimeout(() => {
+            modeToast.style.transition = 'opacity 500ms ease';
+            modeToast.style.opacity = '0';
+            setTimeout(() => { modeToast.style.display = 'none'; modeToast.style.transition = ''; }, 600);
+          }, 900);
+        }
+
+        showModeToast('WALKING');
+
+        walkBtn.addEventListener('click', () => {
+          isMobileWalking = true;
+          walkBtn.style.opacity = '1.0';
+          runBtn.style.opacity = '0.7';
+          showModeToast('WALKING');
+        });
+        runBtn.addEventListener('click', () => {
+          isMobileWalking = false;
+          runBtn.style.opacity = '1.0';
+          walkBtn.style.opacity = '0.7';
+          showModeToast('RUNNING');
+        });
+      }
+
       window.addEventListener('resize', onWindowResize);
 
       function onWindowResize() {
@@ -356,15 +424,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      function throwBall() {
-        const sphere = spheres[sphereIdx];
-        camera.getWorldDirection(playerDirection);
-        sphere.collider.center.copy(playerCollider.end).addScaledVector(playerDirection, playerCollider.radius * 1.5);
-        const impulse = 15 + 30 * (1 - Math.exp((mouseTime - performance.now()) * 0.001));
-        sphere.velocity.copy(playerDirection).multiplyScalar(impulse);
-        sphere.velocity.addScaledVector(playerVelocity, 2);
-        sphereIdx = (sphereIdx + 1) % spheres.length;
-      }
+      // throwBall removed - no ball/projectile functionality
 
       function playerCollisions() {
         const result = worldOctree.capsuleIntersect(playerCollider);
@@ -393,68 +453,7 @@
         camera.position.copy(playerCollider.end);
       }
 
-      function playerSphereCollision(sphere) {
-        const center = vector1.addVectors(playerCollider.start, playerCollider.end).multiplyScalar(0.5);
-        const sphere_center = sphere.collider.center;
-        const r = playerCollider.radius + sphere.collider.radius;
-        const r2 = r * r;
-        for (const point of [playerCollider.start, playerCollider.end, center]) {
-          const d2 = point.distanceToSquared(sphere_center);
-          if (d2 < r2) {
-            const normal = vector1.subVectors(point, sphere_center).normalize();
-            const v1 = vector2.copy(normal).multiplyScalar(normal.dot(playerVelocity));
-            const v2 = vector3.copy(normal).multiplyScalar(normal.dot(sphere.velocity));
-            playerVelocity.add(v2).sub(v1);
-            sphere.velocity.add(v1).sub(v2);
-            const d = (r - Math.sqrt(d2)) / 2;
-            sphere_center.addScaledVector(normal, -d);
-          }
-        }
-      }
-
-      function spheresCollisions() {
-        for (let i = 0, length = spheres.length; i < length; i++) {
-          const s1 = spheres[i];
-          for (let j = i + 1; j < length; j++) {
-            const s2 = spheres[j];
-            const d2 = s1.collider.center.distanceToSquared(s2.collider.center);
-            const r = s1.collider.radius + s2.collider.radius;
-            const r2 = r * r;
-            if (d2 < r2) {
-              const normal = vector1.subVectors(s1.collider.center, s2.collider.center).normalize();
-              const v1 = vector2.copy(normal).multiplyScalar(normal.dot(s1.velocity));
-              const v2 = vector3.copy(normal).multiplyScalar(normal.dot(s2.velocity));
-              s1.velocity.add(v2).sub(v1);
-              s2.velocity.add(v1).sub(v2);
-              const d = (r - Math.sqrt(d2)) / 2;
-              s1.collider.center.addScaledVector(normal, d);
-              s2.collider.center.addScaledVector(normal, -d);
-            }
-          }
-        }
-      }
-
-      function updateSpheres(deltaTime) {
-        spheres.forEach((sphere) => {
-          sphere.collider.center.addScaledVector(sphere.velocity, deltaTime);
-          const result = worldOctree.sphereIntersect(sphere.collider);
-          if (result) {
-            sphere.velocity.addScaledVector(result.normal, -result.normal.dot(sphere.velocity) * 1.5);
-            sphere.collider.center.add(result.normal.multiplyScalar(result.depth));
-          } else {
-            sphere.velocity.y -= GRAVITY * deltaTime;
-          }
-          const damping = Math.exp(-1.5 * deltaTime) - 1;
-          sphere.velocity.addScaledVector(sphere.velocity, damping);
-          playerSphereCollision(sphere);
-        });
-
-        spheresCollisions();
-
-        for (const sphere of spheres) {
-          sphere.mesh.position.copy(sphere.collider.center);
-        }
-      }
+      // sphere/ball physics removed
 
       function getForwardVector() {
         camera.getWorldDirection(playerDirection);
@@ -471,16 +470,18 @@
         return playerDirection;
       }
 
+  // Mobile walk/run mode: run = standard speed, walk = slower (variables declared earlier)
+
       function controls(deltaTime) {
-        const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
+        let baseSpeed = playerOnFloor ? 25 : 8;
+        if (isMobile && isMobileWalking) baseSpeed *= MOBILE_WALK_FACTOR;
+        const speedDelta = deltaTime * baseSpeed;
         // Keyboard (desktop)
-        if (!/Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent)) {
-          if (keyStates['KeyW']) playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
-          if (keyStates['KeyS']) playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
-          if (keyStates['KeyA']) playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
-          if (keyStates['KeyD']) playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
-          if (playerOnFloor && keyStates['Space']) playerVelocity.y = 15;
-        }
+        if (keyStates['KeyW']) playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
+        if (keyStates['KeyS']) playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
+        if (keyStates['KeyA']) playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
+        if (keyStates['KeyD']) playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
+        // Jumping removed - Space no longer gives upward velocity
         // Joystick (mobile)
         if (joyVec.lengthSq() > 0.0001) {
           const forward = getForwardVector().clone();
@@ -489,7 +490,7 @@
           playerVelocity.add(forward.multiplyScalar(-joyVec.y * speedDelta));
           playerVelocity.add(side.multiplyScalar(joyVec.x * speedDelta));
         }
-      }
+  }
 
   // Load local map file
   const loader = new GLTFLoader();
@@ -510,18 +511,61 @@
         helper.visible = false;
         scene.add(helper);
         const gui = new GUI({ width: 200 });
+        // Mobile: keep main GUI collapsed/hidden by default and add a small toggle button
+        if (isMobile) {
+          try { gui.close(); } catch (e) {}
+          if (gui.domElement) gui.domElement.style.display = 'none';
+          const menuToggleBtn = document.createElement('button');
+          menuToggleBtn.id = 'menuToggleBtn';
+          menuToggleBtn.type = 'button';
+          menuToggleBtn.title = 'Menu';
+          menuToggleBtn.textContent = '≡';
+          Object.assign(menuToggleBtn.style, {
+            position: 'fixed',
+            right: '64px',
+            top: '12px',
+            zIndex: 2147483647,
+            width: '44px',
+            height: '44px',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(0,0,0,0.4)',
+            color: '#fff',
+            fontSize: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            backdropFilter: 'blur(4px)'
+          });
+          document.body.appendChild(menuToggleBtn);
+          menuToggleBtn.addEventListener('click', () => {
+            const el = gui.domElement;
+            if (!el) return;
+            if (el.style.display === 'none') {
+              el.style.display = '';
+              try { gui.open(); } catch (e) {}
+              menuToggleBtn.textContent = '✕';
+            } else {
+              el.style.display = 'none';
+              try { gui.close(); } catch (e) {}
+              menuToggleBtn.textContent = '≡';
+            }
+          });
+        }
         gui.add({ debug: false }, 'debug').onChange(function (value) {
           helper.visible = value;
         });
 
         // View distance and fog controls
-        const initialFogColor = scene.fog ? scene.fog.color.clone() : new THREE.Color(0x88ccee);
+        const initialFogColor = new THREE.Color(0x88ccee);
         const settings = {
           viewDistance: camera.far,
-          fogEnabled: scene.fog !== null,
+          // Fog is disabled by default and not adjustable
+          fogEnabled: false,
           fogColor: '#' + initialFogColor.getHexString(),
-          fogNear: scene.fog ? scene.fog.near : 0,
-          fogFar: scene.fog ? scene.fog.far : 50
+          fogNear: 0,
+          fogFar: 50
         };
 
         function applyViewDistance() {
@@ -535,159 +579,50 @@
         }
 
         function applyFog() {
-          if (settings.fogEnabled) {
-            const col = new THREE.Color(settings.fogColor);
-            const near = Math.min(settings.fogNear, settings.fogFar - 0.001);
-            const far = Math.min(settings.fogFar, camera.far);
-            if (!scene.fog) {
-              scene.fog = new THREE.Fog(col, near, far);
-            } else {
-              scene.fog.color.copy(col);
-              scene.fog.near = near;
-              scene.fog.far = far;
-            }
-          } else {
-            scene.fog = null;
-          }
+          // Fog is disabled by default in this build; keep scene.fog null.
+          scene.fog = null;
         }
 
         const viewFolder = gui.addFolder('View');
         viewFolder.add(settings, 'viewDistance', 10, 2000, 1).name('View Distance').onChange(applyViewDistance);
 
-        const fogFolder = gui.addFolder('Fog');
-        fogFolder.add(settings, 'fogEnabled').name('Enabled').onChange(applyFog);
-        fogFolder.addColor(settings, 'fogColor').name('Color').onChange(applyFog);
-        fogFolder.add(settings, 'fogNear', 0, 500, 0.1).name('Near').onChange(() => {
-          if (settings.fogNear >= settings.fogFar) settings.fogNear = Math.max(0, settings.fogFar - 0.1);
-          applyFog();
-        });
-        fogFolder.add(settings, 'fogFar', 1, 2000, 0.1).name('Far').onChange(() => {
-          if (settings.fogFar <= settings.fogNear) settings.fogFar = settings.fogNear + 0.1;
-          if (settings.fogFar > camera.far) settings.fogFar = camera.far;
-          applyFog();
-        });
+        // Fog GUI removed; fog remains disabled by default
 
-        // Lights controls
-        const lightsFolder = gui.addFolder('Lights');
+    // Lights GUI removed - all light controls are fixed/disabled by default
 
-        // Helpers for lights (optional debug)
-        const dirHelper = new THREE.DirectionalLightHelper(directionalLight, 2);
-        dirHelper.visible = false;
-        scene.add(dirHelper);
-        const hemiHelper = new THREE.HemisphereLightHelper(fillLight1, 2);
-        hemiHelper.visible = false;
-        scene.add(hemiHelper);
-
+        // Environment lighting (IBL) controls
+        // Light settings object (used by the separate Light Settings GUI)
         const lightSettings = {
           // Hemisphere
           hemiIntensity: fillLight1.intensity,
           hemiSkyColor: '#' + fillLight1.color.getHexString(),
-          hemiGroundColor: '#' + fillLight1.groundColor.getHexString(),
+          hemiGroundColor: '#' + (fillLight1.groundColor ? fillLight1.groundColor.getHexString() : 'ffffff'),
           hemiX: fillLight1.position.x,
           hemiY: fillLight1.position.y,
           hemiZ: fillLight1.position.z,
-          showHemiHelper: false,
-          // Directional
-          dirIntensity: directionalLight.intensity,
-          dirColor: '#' + directionalLight.color.getHexString(),
-          dirX: directionalLight.position.x,
-          dirY: directionalLight.position.y,
-          dirZ: directionalLight.position.z,
-          dirCastShadow: directionalLight.castShadow,
-          dirShadowBias: directionalLight.shadow.bias,
-          dirShadowRadius: directionalLight.shadow.radius,
-          showDirHelper: false
-        };
-
-        // Hemisphere folder
-        const hemiFolder = lightsFolder.addFolder('Hemisphere');
-        hemiFolder.add(lightSettings, 'hemiIntensity', 0, 5, 0.01).name('Intensity').onChange((v) => {
-          fillLight1.intensity = v;
-        });
-        hemiFolder.addColor(lightSettings, 'hemiSkyColor').name('Sky Color').onChange((v) => {
-          fillLight1.color.set(v);
-          hemiHelper.update();
-        });
-        hemiFolder.addColor(lightSettings, 'hemiGroundColor').name('Ground Color').onChange((v) => {
-          fillLight1.groundColor.set(v);
-          hemiHelper.update();
-        });
-        hemiFolder.add(lightSettings, 'hemiX', -50, 50, 0.1).name('Pos X').onChange((v) => {
-          fillLight1.position.x = v; hemiHelper.update();
-        });
-        hemiFolder.add(lightSettings, 'hemiY', -50, 50, 0.1).name('Pos Y').onChange((v) => {
-          fillLight1.position.y = v; hemiHelper.update();
-        });
-        hemiFolder.add(lightSettings, 'hemiZ', -50, 50, 0.1).name('Pos Z').onChange((v) => {
-          fillLight1.position.z = v; hemiHelper.update();
-        });
-        hemiFolder.add(lightSettings, 'showHemiHelper').name('Show Helper').onChange((v) => {
-          hemiHelper.visible = v;
-        });
-
-        // Directional folder
-        const dirFolder = lightsFolder.addFolder('Directional');
-        dirFolder.add(lightSettings, 'dirIntensity', 0, 10, 0.01).name('Intensity').onChange((v) => {
-          directionalLight.intensity = v; dirHelper.update();
-        });
-        dirFolder.addColor(lightSettings, 'dirColor').name('Color').onChange((v) => {
-          directionalLight.color.set(v); dirHelper.update();
-        });
-        dirFolder.add(lightSettings, 'dirX', -100, 100, 0.1).name('Pos X').onChange((v) => {
-          directionalLight.position.x = v; dirHelper.update();
-        });
-        dirFolder.add(lightSettings, 'dirY', -100, 100, 0.1).name('Pos Y').onChange((v) => {
-          directionalLight.position.y = v; dirHelper.update();
-        });
-        dirFolder.add(lightSettings, 'dirZ', -100, 100, 0.1).name('Pos Z').onChange((v) => {
-          directionalLight.position.z = v; dirHelper.update();
-        });
-        dirFolder.add(lightSettings, 'dirCastShadow').name('Cast Shadow').onChange((v) => {
-          directionalLight.castShadow = v;
-        });
-        dirFolder.add(lightSettings, 'dirShadowBias', -0.005, 0.005, 0.00001).name('Shadow Bias').onChange((v) => {
-          directionalLight.shadow.bias = v;
-        });
-        dirFolder.add(lightSettings, 'dirShadowRadius', 0, 10, 0.1).name('Shadow Radius').onChange((v) => {
-          directionalLight.shadow.radius = v;
-        });
-        dirFolder.add(lightSettings, 'showDirHelper').name('Show Helper').onChange((v) => {
-          dirHelper.visible = v; dirHelper.update();
-        });
-
-        // Ambient folder
-        const ambSettings = {
+          // Ambient
           ambIntensity: ambientLight.intensity,
-          ambColor: '#' + ambientLight.color.getHexString()
+          // Environment (IBL)
+          envEnabled: true,
+          envIntensity: 1.0
         };
-        const ambFolder = lightsFolder.addFolder('Ambient');
-        ambFolder.add(ambSettings, 'ambIntensity', 0, 2, 0.01).name('Intensity').onChange((v) => {
-          ambientLight.intensity = v;
-        });
-        ambFolder.addColor(ambSettings, 'ambColor').name('Color').onChange((v) => {
-          ambientLight.color.set(v);
-        });
 
-        // Environment lighting (IBL) controls
-        const envSettings = { enabled: true, intensity: 1.0 };
+        // Environment lighting (IBL) - controlled by lightSettings
         function applyEnv() {
-          scene.environment = envSettings.enabled ? roomEnvMap : null;
+          scene.environment = (lightSettings.envEnabled && roomEnvMap) ? roomEnvMap : null;
           // Update envMapIntensity on materials that support it
           scene.traverse((child) => {
             if (child.isMesh && child.material) {
               const mats = Array.isArray(child.material) ? child.material : [child.material];
               mats.forEach((m) => {
                 if ('envMapIntensity' in m) {
-                  m.envMapIntensity = envSettings.enabled ? envSettings.intensity : 0;
+                  m.envMapIntensity = (lightSettings.envEnabled && roomEnvMap) ? lightSettings.envIntensity : 0;
                   m.needsUpdate = true;
                 }
               });
             }
           });
         }
-        const envFolder = gui.addFolder('Environment');
-        envFolder.add(envSettings, 'enabled').name('Enabled').onChange(applyEnv);
-        envFolder.add(envSettings, 'intensity', 0, 3, 0.01).name('Intensity').onChange(applyEnv);
 
         // Renderer exposure (overall brightness)
         const renderFolder = gui.addFolder('Render');
@@ -695,6 +630,83 @@
         renderFolder.add(renderSettings, 'exposure', 0.1, 2.5, 0.01).name('Exposure').onChange((v) => {
           renderer.toneMappingExposure = v;
         });
+
+        // Separate Light Settings GUI (kept apart from main settings)
+        const lightGui = new GUI({ title: 'Light Settings', width: 320 });
+        const hemiFolder = lightGui.addFolder('Hemisphere');
+        hemiFolder.add(lightSettings, 'hemiIntensity', 0, 10, 0.01).name('Intensity').onChange((v) => {
+          fillLight1.intensity = v;
+        });
+        hemiFolder.addColor(lightSettings, 'hemiSkyColor').name('Sky Color').onChange((v) => {
+          fillLight1.color.set(v);
+        });
+        hemiFolder.addColor(lightSettings, 'hemiGroundColor').name('Ground Color').onChange((v) => {
+          fillLight1.groundColor.set(v);
+        });
+        hemiFolder.add(lightSettings, 'hemiX', -50, 50, 0.1).name('Pos X').onChange((v) => {
+          fillLight1.position.x = v;
+        });
+        hemiFolder.add(lightSettings, 'hemiY', -50, 50, 0.1).name('Pos Y').onChange((v) => {
+          fillLight1.position.y = v;
+        });
+        hemiFolder.add(lightSettings, 'hemiZ', -50, 50, 0.1).name('Pos Z').onChange((v) => {
+          fillLight1.position.z = v;
+        });
+
+        const ambFolder = lightGui.addFolder('Ambient');
+        ambFolder.add(lightSettings, 'ambIntensity', 0, 2, 0.01).name('Intensity').onChange((v) => {
+          ambientLight.intensity = v;
+        });
+
+        const envFolder2 = lightGui.addFolder('Environment');
+        envFolder2.add(lightSettings, 'envEnabled').name('Enabled').onChange(applyEnv);
+        envFolder2.add(lightSettings, 'envIntensity', 0, 3, 0.01).name('Intensity').onChange(applyEnv);
+
+        // Mobile: keep Light Settings collapsed/hidden by default and add a small toggle button
+        if (isMobile) {
+          try { lightGui.close(); } catch (e) {}
+          // hide the light GUI panel
+          if (lightGui.domElement) lightGui.domElement.style.display = 'none';
+
+          const lightToggleBtn = document.createElement('button');
+          lightToggleBtn.id = 'lightToggleBtn';
+          lightToggleBtn.type = 'button';
+          lightToggleBtn.title = 'Light Settings';
+          lightToggleBtn.textContent = '☼';
+          Object.assign(lightToggleBtn.style, {
+            position: 'fixed',
+            right: '12px',
+            top: '12px',
+            zIndex: 2147483647,
+            width: '44px',
+            height: '44px',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: 'rgba(0,0,0,0.4)',
+            color: '#fff',
+            fontSize: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            backdropFilter: 'blur(4px)'
+          });
+          document.body.appendChild(lightToggleBtn);
+
+          lightToggleBtn.addEventListener('click', () => {
+            const el = lightGui.domElement;
+            if (!el) return;
+            if (el.style.display === 'none') {
+              el.style.display = '';
+              try { lightGui.open(); } catch (e) {}
+              lightToggleBtn.textContent = '✕';
+            } else {
+              el.style.display = 'none';
+              try { lightGui.close(); } catch (e) {}
+              lightToggleBtn.textContent = '☼';
+            }
+          });
+        }
 
         // Initialize to current settings
         applyViewDistance();
@@ -721,7 +733,6 @@
         for (let i = 0; i < STEPS_PER_FRAME; i++) {
           controls(deltaTime);
           updatePlayer(deltaTime);
-          updateSpheres(deltaTime);
           teleportPlayerIfOob();
         }
         renderer.render(scene, camera);
