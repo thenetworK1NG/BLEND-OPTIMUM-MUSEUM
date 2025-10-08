@@ -25,17 +25,160 @@
     #mobileOverlay.show { display: flex; }
     #mobileOverlay .panel { text-align: center; background: rgba(0,0,0,0.5); padding: 16px 24px; border-radius: 10px; }
     #mobileOverlay button { margin-top: 10px; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.15); color: #fff; }
+    /* Mobile scene loader styles (provided by user) */
+    .mobile-loader-wrapper { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 2147483649; background: rgba(0,0,0,0.7); }
+    .master-container { margin: 0; padding: 20px 40px; background-color: #131516; display: grid; border-radius: 13px; border: 1px solid #2c2d2e; transform: scale(0.7); }
+    .master-container .container { width: 300px; height: 300px; position: relative; margin: auto; border-radius: 50%; border: 2px solid white; overflow: hidden; }
+    /* (rest of loader CSS) */
+    .master-container .crescent { position: relative; height: 50px; width: 50px; border-radius: 50%; left: calc(50% - 25px); top: 12px; overflow: hidden; animation: rotate 3s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .crescent span:nth-child(2) { position: absolute; display: block; width: 100%; height: 100%; box-shadow: inset 0 0 0 2px white; border-radius: 50%; }
+    .master-container .crescent span:nth-child(1) { background-color: #131516; position: absolute; left: 40%; display: block; width: calc(70% - 6px); height: calc(70% - 6px); box-shadow: inset 0 0 0 2px white; border-radius: 50%; z-index: 9; }
+    .master-container .star { position: absolute; overflow: hidden; border-radius: 50%; height: 20px; width: 20px; }
+    .master-container .star span:nth-child(1)::before { content: ""; border: 2px solid white; height: 50%; width: 50%; border-top-color: transparent; border-left-color: transparent; border-radius: 0% 0% 100% 10%; display: block; left: -3px; top: -3px; position: absolute; }
+    .master-container .star span:nth-child(1)::after { content: ""; border: 2px solid white; height: 50%; width: 50%; border-bottom-color: transparent; border-left-color: transparent; border-radius: 0% 100% 0% 0%; display: block; left: -3px; bottom: -3px; position: absolute; }
+    .master-container .star span:nth-child(2)::before { content: ""; border: 2px solid white; height: 50%; width: 50%; border-top-color: transparent; border-right-color: transparent; border-radius: 0% 0% 0% 100%; display: block; right: -3px; top: -3px; position: absolute; }
+    .master-container .star span:nth-child(2)::after { content: ""; border: 2px solid white; height: 50%; width: 50%; border-bottom-color: transparent; border-right-color: transparent; border-radius: 100% 0% 0% 0%; display: block; right: -3px; bottom: -3px; position: absolute; }
+    .master-container .small-star { position: absolute; overflow: hidden; border-radius: 50%; height: 12px; width: 12px; }
+    .master-container .small-star span:nth-child(1)::before { content: ""; border: 1.5px solid white; height: 50%; width: 50%; border-top-color: transparent; border-left-color: transparent; border-radius: 0% 0% 100% 10%; display: block; left: -2px; top: -2px; position: absolute; }
+    .master-container .small-star span:nth-child(1)::after { content: ""; border: 1.5px solid white; height: 50%; width: 50%; border-bottom-color: transparent; border-left-color: transparent; border-radius: 0% 100% 0% 0%; display: block; left: -2px; bottom: -2px; position: absolute; }
+    .master-container .small-star span:nth-child(2)::before { content: ""; border: 1.5px solid white; height: 50%; width: 50%; border-top-color: transparent; border-right-color: transparent; border-radius: 0% 0% 0% 100%; display: block; right: -2px; top: -2px; position: absolute; }
+    .master-container .small-star span:nth-child(2)::after { content: ""; border: 1.5px solid white; height: 50%; width: 50%; border-bottom-color: transparent; border-right-color: transparent; border-radius: 100% 0% 0% 0%; display: block; right: -2px; bottom: -2px; position: absolute; }
+    .master-container .s1 { left: 60px; top: 50px; animation: glow 1.1s 0.9s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .s2 { right: 35px; bottom: 155px; animation: glow 1.3s 0.5s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .s3 { left: calc(50% - 10px); top: 75px; animation: glow 1.5s 0.3s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .s4 { left: 35px; bottom: 155px; animation: glow 3s 0.7s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .s5 { right: 60px; top: 50px; animation: glow 2s 1.2s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss1 { right: 15px; bottom: 130px; animation: glow 2s 1s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss2 { left: 15px; bottom: 130px; animation: glow 1s 0s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss3 { left: 35px; bottom: 195px; animation: glow 1.9s 0.1s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss4 { right: 35px; bottom: 195px; animation: glow 1.6s 0.9s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss5 { left: 100px; bottom: 180px; animation: glow 1s 0.5s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss6 { right: 100px; bottom: 180px; animation: glow 1.7s 0.6s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss7 { right: 90px; top: 30px; animation: glow 0.8s 0.8s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .ss8 { left: 90px; top: 30px; animation: glow 1.8s 0.3s cubic-bezier(0.15, 0.83, 0.66, 1) infinite; }
+    .master-container .hill { display: block; width: 140%; height: 100%; border: 2px solid white; border-radius: 50%; bottom: -40%; position: relative; left: -20%; background-size: 3%; background-repeat: repeat; opacity: 0.7; }
+    .mobile-loader-wrapper .fire-pit { width: 18px; height: 30px; position: absolute; left: calc(50% - 9px); bottom: 25px; z-index: 99; }
+    .mobile-loader-wrapper .fire { width: 0; height: 0; border: 9px solid transparent; border-bottom: 18px solid #ffffff; position: relative; top: -9px; }
+    .mobile-loader-wrapper .fire:after { content: ""; position: absolute; left: -9px; top: 18px; width: 0; height: 0; border: 9px solid transparent; border-top: 9px solid #ffffff; }
+    .mobile-loader-wrapper .inner-fire { width: 0; height: 0; border: 4.5px solid transparent; border-bottom: 9px solid #131516; top: 4.5px; position: absolute; z-index: 9; left: -4.5px; }
+    .mobile-loader-wrapper .inner-fire:after { content: ""; position: absolute; left: -4.5px; top: 9px; width: 0; height: 0; border: 4.5px solid transparent; border-top: 6px solid #131516; }
+    .mobile-loader-wrapper .log1 { background-color: white; height: 2px; transform: rotate(35deg); transform-origin: center; position: relative; left: -3px; bottom: -1.5px; }
+    .mobile-loader-wrapper .log2 { background-color: white; height: 2px; transform: rotate(-35deg); transform-origin: center; left: 3px; position: relative; bottom: -0px; }
+    .mobile-loader-wrapper .hut { width: 0; height: 0; border-left: 38px solid transparent; border-right: 38px solid transparent; border-bottom: 75px solid #131516; position: absolute; left: calc(50% - 37.6px); z-index: 11; bottom: 80px; transform: scale(1.3); }
+    .mobile-loader-wrapper .doorway > hr.split { height: 44px; width: 1px; position: absolute; left: 0px; top: 0; display: inline-block; background-color: white; border: 0; }
+    .mobile-loader-wrapper .tree { position: absolute; width: 25px; height: 48px; z-index: 21; transform: scale(1.3); }
+    .mobile-loader-wrapper .loading-text { color: white; font-family: 'Inter', sans-serif; display: block; text-align: center; padding: 20px 0 0 0; opacity: 0.95; }
+    @keyframes glow { 0% { transform: scale(0); } 50% { transform: scale(1); } 100% { transform: scale(0); } }
+    @keyframes rotate { 0% { transform: rotate(0); } 50% { transform: rotate(10deg); } 100% { transform: rotate(0); } }
   </style>
   </head>
   <body>
     
-    <div id="container"></div>
+  <div id="container"></div>
     <div id="joystick"><div id="joystickKnob"></div></div>
     <div id="mobileOverlay">
       <div class="panel">
         <div style="font-weight:600; margin-bottom:6px;">Rotate device to landscape</div>
         <div>Tap to play; drag to look, left joystick to move.</div>
         <button id="startBtn">Start</button>
+      </div>
+    </div>
+
+    <!-- Mobile loader (shown only on mobile while the scene/model is loading) -->
+    <div class="mobile-loader-wrapper" id="mobileLoader" role="status" aria-live="polite">
+      <div class="master-container">
+        <div class="container">
+          <div class="crescent">
+            <span></span><span></span>
+          </div>
+          <div class="star s1">
+            <span></span><span></span>
+          </div>
+          <div class="star s2">
+            <span></span><span></span>
+          </div>
+          <div class="star s3">
+            <span></span><span></span>
+          </div>
+          <div class="star s4">
+            <span></span><span></span>
+          </div>
+          <div class="star s5">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss1">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss2">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss3">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss4">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss5">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss6">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss7">
+            <span></span><span></span>
+          </div>
+          <div class="small-star ss8">
+            <span></span><span></span>
+          </div>
+          <div class="hut">
+            <hr>
+            <hr>
+            <hr>
+            <hr>
+            <hr>
+            <hr>
+            <div class="doorway">
+              <hr class="split">
+            </div>
+          </div>
+          <div class="fire-pit">
+            <div class="fire">
+              <div class="inner-fire"></div>
+            </div>
+            <hr class="log1">
+            <hr class="log2">
+          </div>
+          <div class="tree one">
+            <hr class="trunc">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+          </div>
+          <div class="tree two">
+            <hr class="trunc">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+          </div>
+          <div class="tree three">
+            <hr class="trunc">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+          </div>
+          <div class="tree four">
+            <hr class="trunc">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+            <hr class="leaves">
+          </div>
+          <div class="hill"></div>
+        </div>
+        <span class="loading-text">Loading Page.. Please Wait!</span>
       </div>
     </div>
 
@@ -543,7 +686,37 @@
   // If you host updated models frequently, adding a version or timestamp query string
   // forces the browser to request the latest file instead of using a cached copy.
   const modelUrl = 'map.glb' + (location.search.includes('modelver=') ? '' : '?v=' + Date.now());
-    loader.load(modelUrl, (gltf) => {
+
+  // Mobile loader element and helpers
+  const mobileLoaderEl = document.getElementById('mobileLoader');
+  const mobileLoadingText = mobileLoaderEl?.querySelector('.loading-text');
+  function showMobileLoader() { if (mobileLoaderEl) mobileLoaderEl.style.display = 'flex'; }
+  function hideMobileLoader() { if (mobileLoaderEl) mobileLoaderEl.style.display = 'none'; }
+
+  // Only show the loader on mobile devices
+  if (isMobile) showMobileLoader();
+
+  // GLTFLoader progress callback (some servers may not provide total length)
+  function onProgress(xhr) {
+    if (!mobileLoadingText) return;
+    if (xhr.lengthComputable) {
+      const percent = (xhr.loaded / xhr.total) * 100;
+      mobileLoadingText.textContent = `Loading scene... ${Math.round(percent)}%`;
+    } else {
+      const kb = Math.round(xhr.loaded / 1024);
+      mobileLoadingText.textContent = `Loading scene... ${kb} KB`;
+    }
+  }
+
+  function onError(err) {
+    if (mobileLoadingText) mobileLoadingText.textContent = 'Failed to load scene. Try reloading.';
+    console.error('Error loading model:', err);
+    setTimeout(hideMobileLoader, 4000);
+  }
+
+  loader.load(modelUrl, (gltf) => {
+        // Model loaded successfully; hide the mobile loader
+        hideMobileLoader();
         scene.add(gltf.scene);
         gltf.scene.updateMatrixWorld(true);
         worldOctree.fromGraphNode(gltf.scene);
@@ -761,9 +934,7 @@
         applyViewDistance();
         applyFog();
         applyEnv();
-      }, undefined, (err) => {
-        console.error('Failed to load map.glb:', err);
-      });
+      }, onProgress, onError);
 
       
 
