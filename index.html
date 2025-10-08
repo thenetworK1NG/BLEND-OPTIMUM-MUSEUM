@@ -218,10 +218,12 @@
   // --- Mobile support: orientation, touch look, and joystick move ---
       const overlay = document.getElementById('mobileOverlay');
       const startBtn = document.getElementById('startBtn');
-      const joystick = document.getElementById('joystick');
-      const knob = document.getElementById('joystickKnob');
-      let touchLookActive = false;
-      let lastTouchX = 0, lastTouchY = 0;
+  const joystick = document.getElementById('joystick');
+  const knob = document.getElementById('joystickKnob');
+  // Track a specific touch id for touch-look so joystick touches don't conflict
+  let touchLookActive = false;
+  let touchLookId = null;
+  let lastTouchX = 0, lastTouchY = 0;
   let joyActive = false;
   let joyCx = 0, joyCy = 0, joyR = 0;
   let joyTouchId = null;
@@ -251,23 +253,43 @@
         if (!isMobile) return;
         for (const t of e.changedTouches) {
           const x = t.clientX, y = t.clientY;
-          if (x > window.innerWidth * 0.35) {
-            touchLookActive = true; lastTouchX = x; lastTouchY = y;
+          // Right 65% of screen is for looking
+          if (x > window.innerWidth * 0.35 && touchLookId === null) {
+            touchLookActive = true;
+            touchLookId = t.identifier;
+            lastTouchX = x; lastTouchY = y;
+            break; // only take the first valid look touch
           }
         }
       }
       function onTouchMove(e) {
         if (!isMobile) return;
-        if (touchLookActive) {
-          const t = e.changedTouches[0];
-          const dx = t.clientX - lastTouchX; const dy = t.clientY - lastTouchY;
-          camera.rotation.y -= dx / 250; // more sensitive on mobile
-          camera.rotation.x -= dy / 250;
-          clampPitch();
-          lastTouchX = t.clientX; lastTouchY = t.clientY;
+        if (!touchLookActive || touchLookId === null) return;
+        // Find the changed touch that matches the touchLookId
+        let t = null;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === touchLookId) { t = e.changedTouches[i]; break; }
+        }
+        if (!t) return;
+        const dx = t.clientX - lastTouchX; const dy = t.clientY - lastTouchY;
+        camera.rotation.y -= dx / 250; // more sensitive on mobile
+        camera.rotation.x -= dy / 250;
+        clampPitch();
+        lastTouchX = t.clientX; lastTouchY = t.clientY;
+      }
+      function onTouchEnd(e) {
+        if (!isMobile) return;
+        if (!touchLookActive || touchLookId === null) return;
+        if (e && e.changedTouches) {
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchLookId) {
+              touchLookActive = false; touchLookId = null; break;
+            }
+          }
+        } else {
+          touchLookActive = false; touchLookId = null;
         }
       }
-      function onTouchEnd() { touchLookActive = false; }
       window.addEventListener('touchstart', onTouchStart, { passive: false });
       window.addEventListener('touchmove', onTouchMove, { passive: false });
       window.addEventListener('touchend', onTouchEnd, { passive: false });
