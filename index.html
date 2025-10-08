@@ -132,6 +132,52 @@
   stats.domElement.style.display = isMobile ? 'none' : 'block';
   container.appendChild(stats.domElement);
 
+  // Custom average FPS display (shows >60Hz and a running average)
+  const fpsDisplay = document.createElement('div');
+  fpsDisplay.id = 'fpsDisplay';
+  Object.assign(fpsDisplay.style, {
+    position: 'absolute',
+    top: '0px',
+    right: '0px',
+    padding: '6px 8px',
+    color: '#0ff',
+    background: 'rgba(0,0,0,0.45)',
+    fontFamily: 'monospace',
+    fontSize: '12px',
+    borderRadius: '0 0 6px 0',
+    pointerEvents: 'none',
+    zIndex: 1000,
+  });
+  fpsDisplay.style.display = isMobile ? 'none' : 'block';
+  // Compose display with prominent average and smaller instantaneous
+  const avgSpan = document.createElement('div');
+  avgSpan.id = 'fpsAvg';
+  Object.assign(avgSpan.style, {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#0ff',
+    lineHeight: '1',
+  });
+  avgSpan.textContent = 'AVG: --.- FPS';
+
+  const instSpan = document.createElement('div');
+  instSpan.id = 'fpsInst';
+  Object.assign(instSpan.style, {
+    fontSize: '11px',
+    color: '#9ff',
+    opacity: '0.9',
+    lineHeight: '1',
+  });
+  instSpan.textContent = 'INST: --.-';
+
+  fpsDisplay.appendChild(avgSpan);
+  fpsDisplay.appendChild(instSpan);
+  container.appendChild(fpsDisplay);
+
+  // Simple moving-average buffer for FPS (keeps last N samples)
+  const FPS_SAMPLE_MAX = 120; // ~2 seconds at 60Hz
+  const fpsSamples = [];
+
       const GRAVITY = 30;
 
       const STEPS_PER_FRAME = isMobile ? 2 : 5;
@@ -729,7 +775,9 @@
       }
 
       function animate() {
-        const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
+        // Use a single clock.getDelta() call so we can compute FPS correctly
+        const frameDelta = Math.min(0.05, clock.getDelta()); // seconds (capped to avoid huge jumps)
+        const deltaTime = frameDelta / STEPS_PER_FRAME;
         for (let i = 0; i < STEPS_PER_FRAME; i++) {
           controls(deltaTime);
           updatePlayer(deltaTime);
@@ -737,6 +785,15 @@
         }
         renderer.render(scene, camera);
         stats.update();
+
+        // Update our FPS display: instantaneous and running average
+  const instantFps = frameDelta > 0 ? (1 / frameDelta) : 0;
+  fpsSamples.push(instantFps);
+  if (fpsSamples.length > FPS_SAMPLE_MAX) fpsSamples.shift();
+  const avgFps = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length;
+  // Update spans: average first (prominent), instant smaller
+  avgSpan.textContent = `AVG: ${avgFps.toFixed(1)} FPS`;
+  instSpan.textContent = `INST: ${instantFps.toFixed(1)}`;
       }
     </script>
   </body>
