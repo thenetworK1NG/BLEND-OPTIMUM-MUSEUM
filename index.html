@@ -538,9 +538,12 @@
         }
   }
 
-  // Load local map file
+  // Load local map file (use a cache-busting query param so updated models are fetched by clients)
   const loader = new GLTFLoader();
-      loader.load('map.glb', (gltf) => {
+  // If you host updated models frequently, adding a version or timestamp query string
+  // forces the browser to request the latest file instead of using a cached copy.
+  const modelUrl = 'map.glb' + (location.search.includes('modelver=') ? '' : '?v=' + Date.now());
+    loader.load(modelUrl, (gltf) => {
         scene.add(gltf.scene);
         gltf.scene.updateMatrixWorld(true);
         worldOctree.fromGraphNode(gltf.scene);
