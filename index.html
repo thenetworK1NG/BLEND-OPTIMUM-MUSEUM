@@ -96,7 +96,7 @@
   ambientLight = new THREE.AmbientLight(0xffffff, 1);
         scene.add(ambientLight);
   // Hemisphere light: default settings (from user-specified values)
-  fillLight1 = new THREE.HemisphereLight(0xfffdf5, 0xffffff, 3.07);
+  fillLight1 = new THREE.HemisphereLight(0xfffdf5, 0xffffff, 0.40);
   fillLight1.position.set(2, 1, 1);
   scene.add(fillLight1);
         // Directional light intentionally disabled on mobile (intensity 0)
@@ -105,7 +105,7 @@
         // not added to scene
       } else {
   // Hemisphere light: default settings (from user-specified values)
-  fillLight1 = new THREE.HemisphereLight(0xfffdf5, 0xffffff, 3.07);
+  fillLight1 = new THREE.HemisphereLight(0xfffdf5, 0xffffff, 0.40);
   fillLight1.position.set(2, 1, 1);
   scene.add(fillLight1);
 
@@ -132,6 +132,7 @@
   renderer.shadowMap.enabled = !isMobile; // disable shadows on mobile
       renderer.shadowMap.type = THREE.VSMShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.63;
       container.appendChild(renderer.domElement);
 
   // Prefiltered environment map (IBL) for realistic ambient lighting - skip on mobile for perf
